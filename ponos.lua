@@ -48,6 +48,8 @@ local settings = {
     multiCoreEnabled = false,
     firstStart = true,
 
+    turretsTrustedPlayers = {},
+
     windowData = {}
 }
 
@@ -71,6 +73,7 @@ local function loadSettings()
     if settings.accentColor ~= nil then
         colors.accentColor = settings.accentColor
     end
+    if settings.turretsTrustedPlayers == nil then settings.turretsTrustedPlayers = {} end
 end
 
 ---------- window position saving
@@ -114,6 +117,25 @@ local function calculateMultiCoreDimensions(anchor)
             wrapper.ship.setDimNegative(new_back_s, new_left_s, new_down_s, ship)
         end
     end
+end
+
+local function addTrustedPlayer(addr, name)
+    if not settings.turretsTrustedPlayers[addr] then
+        settings.turretsTrustedPlayers[addr] = {}
+    end
+    table.insert(settings.turretsTrustedPlayers[addr], name)
+end
+local function removeTrustedPlayer(addr, ind)
+    if not settings.turretsTrustedPlayers[addr] then
+        settings.turretsTrustedPlayers[addr] = {}
+    end
+    table.remove(settings.turretsTrustedPlayers[addr], ind)
+end
+local function getTrustedPlayers(addr)
+    if not settings.turretsTrustedPlayers[addr] then
+        return {}
+    end
+    return settings.turretsTrustedPlayers[addr]
 end
 
   
@@ -961,6 +983,145 @@ local windows = {
         end
 
         return window
+    end,
+
+    turret = function ()
+        if not wrapper.turretApiAvailable() then
+            GUI.alert("Open modular turret is not available.")
+            return nil
+        end
+
+        local window = p_window(1, 1, 60, 25, "Turrets", "turret")
+
+        local layout = getWindowLayout(window, 1, 4)
+        local data = wrapper.turret.getTurretsData()
+
+        layout:setAlignment(1, 1, GUI.ALIGNMENT_HORIZONTAL_LEFT, GUI.ALIGNMENT_VERTICAL_CENTER)
+        layout:setPosition(1, 1, layout:addChild(GUI.label(1, 1, 1, 1, colors.contentColor, "Turrels available: " .. tostring(#data))))
+
+        -- Turrets list
+        layout:setFitting(1, 2, true, true)
+        local turretsList = layout:setPosition(1, 2, layout:addChild(p_textBoxWithSelection(1, 1, 1, 1)))
+        turretsList:setAlignment(GUI.ALIGNMENT_HORIZONTAL_LEFT, GUI.ALIGNMENT_VERTICAL_CENTER)
+        for i, turret in ipairs(data) do
+                turretsList:addItem(string.format("%s:[%s] owner: %s; energy: %s%%", 
+                    tostring(i),
+                    string.sub(tostring(turret.addr), 1, 3),
+                    turret.owner,
+                    tostring(turret.energyPercent)))
+        end
+
+
+
+        layout:setFitting(1, 3, true, true)
+        layout:setMargin(1, 3, 0, 2)
+        local playerPanel = layout:setPosition(1, 3, layout:addChild(GUI.layout(1, 1, 1, 2, 2, 1 )))
+
+        playerPanel:setAlignment(1, 1, GUI.ALIGNMENT_HORIZONTAL_LEFT, GUI.ALIGNMENT_VERTICAL_CENTER)
+        playerPanel:setPosition(1, 1, playerPanel:addChild(GUI.label(1, 1, 1, 1, colors.contentColor, "Trusted players:")))
+        local playersList = playerPanel:setPosition(1, 1, playerPanel:addChild(GUI.comboBox(1, 1, 20, 1, colors.elevation4, colors.contentColor2, colors.elevation2, colors.contentColor2)))
+        
+        playerPanel:setDirection(2, 1, GUI.DIRECTION_HORIZONTAL)
+        playerPanel:setFitting(2, 1, true, true)
+        local buttonsPanel = playerPanel:setPosition(2, 1, playerPanel:addChild(GUI.layout(1, 1, 1, 1, 1, 3)))
+
+        buttonsPanel:setFitting(1, 1, true, false)
+        buttonsPanel:setDirection(1, 1, GUI.DIRECTION_HORIZONTAL)
+        local addPanel = buttonsPanel:setPosition(1, 1, buttonsPanel:addChild(GUI.layout(1, 1, 1, 1, 3, 1)))
+        addPanel:setFitting(1, 1, true, true)
+        addPanel:setColumnWidth(1, GUI.SIZE_POLICY_RELATIVE, 0.55)
+        addPanel:setMargin(1, 1, 1, 0)
+        local nameInput = addPanel:setPosition(1, 1, addPanel:addChild(p_input(1, 1, 1, 1, "name")))
+        local addButton = addPanel:setPosition(2, 1, addPanel:addChild(p_accentButton(1, 1, 3, 1, "+")))
+        local addToAllButton = addPanel:setPosition(3, 1, addPanel:addChild(p_accentButton(1, 1, 5, 1, "all")))
+
+        local removeButton = buttonsPanel:setPosition(1, 2, buttonsPanel:addChild(p_accentButton(1, 1, 20, 3, "Remove")))
+
+        addButton.disabled = true
+        removeButton.disabled = true
+        addToAllButton.disabled = true
+
+
+        local function updatePlayerList(addr)
+            playersList:clear()
+
+            for _, name in ipairs(getTrustedPlayers(addr)) do 
+                playersList:addItem(name)
+            end
+
+        end
+
+        -- fields callbacks
+
+        nameInput.onInputFinished = function()
+            if nameInput.text == "" then
+                addButton.disabled = true
+                addToAllButton.disabled = true
+                return
+            end
+            if turretsList.selectedIndex ~= nil then
+                addButton.disabled = false
+            end
+                addToAllButton.disabled = false
+        end
+
+        turretsList.onItemSelected = function()
+            if playersList.selectedIndex ~= nil then
+                removeButton.disabled = false
+            end
+            if nameInput.text ~= "" then
+                addButton.disabled = false
+            end
+            updatePlayerList(data[turretsList.selectedIndex].addr)
+        end
+
+        playersList.onItemSelected = function()
+            if turretsList.selectedIndex ~= nil then
+                removeButton.disabled = false
+            end
+        end
+        -- buttons callbacks
+
+        addButton.onTouch = function()
+            local turret = data[turretsList.selectedIndex]
+            local player = nameInput.text
+
+            if player == turret.owner then 
+                GUI.alert("You can't add owner to trusted players list.")
+                return
+            end
+            if getTrustedPlayers(turret.addr)[player] ~= nil then
+                GUI.alert("Player" .. player .. "already in trusted players list.")
+                return
+            end
+            addTrustedPlayer(turret.addr, player)
+            wrapper.turret.addPlayer(turret.addr, player)
+            playersList:addItem(player)
+            addButton.disabled = true
+        end
+
+        removeButton.onTouch = function()
+            local turret = data[turretsList.selectedIndex]
+            removeTrustedPlayer(turret.addr, playersList.selectedIndex)
+            wrapper.turret.removePlayer(turret.addr, playersList.selectedIndex)
+            updatePlayerList(turret.addr)
+            removeButton.disabled = true
+        end
+
+        addToAllButton.onTouch = function()
+            for _, turret in ipairs(data) do
+                local player = nameInput.text
+                if getTrustedPlayers(turret.addr)[player] ~= nil then
+                    addTrustedPlayer(turret.addr, player)
+                    wrapper.turret.addPlayer(turret.addr, player)
+                end
+            end
+            
+        end
+
+        
+
+        return window
     end
 }
 
@@ -1283,10 +1444,15 @@ bar = application:addChild(p_appBar(1, 2, application.width, {
     { "Warp Radar", "radar" },
     { "The Crew 2", "crew" },
     { "Cloaking", "cloaking" },
-    { "Transporter", "transporter" }
+    { "Transporter", "transporter" },
+    { "Turret", "turret" }
 }))
 
 bar.onAppSelected = function(id)
+    if windows[id] == nil then
+        GUI.alert("Window with id '" .. id .. "' is not implemented.")
+        return
+    end
     window = windows[id]()
 
     windowManager.openWindow(window)

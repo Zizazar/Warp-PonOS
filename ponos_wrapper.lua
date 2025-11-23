@@ -8,6 +8,7 @@ wrapper.demoMode = false -- Demo mode allows using the program without actual Wa
 wrapper.ship = {} -- ShipController
 wrapper.radar = {} -- Radar
 wrapper.transporter = {} -- MatterOverdrive Transporter
+wrapper.turret = {} -- Open Modular Turret
 
 wrapper.ship.controllerTimes = {}
 
@@ -25,6 +26,17 @@ end
 
 wrapper.transporterApiAvailable = function()
     return component.isAvailable("mo_transporter") or wrapper.demoMode
+end
+
+wrapper.turretApiAvailable = function()
+    if wrapper.demoMode then return true end
+
+    local tiers = {"Two", "Three", "Four", "Five"}
+    for _, tier in ipairs(tiers) do
+            if component.isAvailable("tier" .. tier .. "TurretBase") then
+                return true
+            end
+    end
 end
 
 wrapper.toggleDemoMode = function()
@@ -541,5 +553,51 @@ wrapper.ship.setDimNegative = function(back, left, down, addr)
 
     return wrapper.ship.getComponent(addr).dim_negative(back, left, down)
 end
+
+
+wrapper.turret.getAllBasesAddresses = function ()
+    -- Little trick to get all turret bases (tierTwoTurretBase, tierThreeTurretBase ...)
+    local addrs = {}
+    for k, _ in pairs(component.list("tier")) do 
+        table.insert(addrs, k) 
+    end
+    return addrs
+end
+
+wrapper.turret.getComponent = function(addr)
+    if addr ~= nil then
+        return component.proxy(addr)
+    else
+        return component.tierTwoTurretBase or component.tierThreeTurretBase or component.tierFourTurretBase
+    end
+end
+
+wrapper.turret.getTurretsData = function () 
+    if wrapper.demoMode then return {
+            { owner = "Demo", trusted = {}, energyPercent = 100, addr = "e893bf80-68ef-4fcd-bde1-0be8a184b482"},
+            { owner = "Demo", trusted = {"test", "creeper"}, energyPercent = 23, addr = "test" }
+    } end
+    local data = {}
+    for _, k in ipairs(wrapper.turret.getAllBasesAddresses()) do
+        local t = wrapper.turret.getComponent(k)
+        table.insert(data, {
+            owner = t.getOwner(),
+            energyPercent = math.ceil(t.getCurrentEnergyStorage() / t.getMaxEnergyStorage() * 100),
+            addr = k
+        })
+    end
+    return data
+end
+
+wrapper.turret.addPlayer = function (addr, player)
+    if wrapper.demoMode then return end
+    wrapper.turret.getComponent(addr).addTrustedPlayer(player)
+end
+
+wrapper.turret.removePlayer = function (addr, player)
+    if wrapper.demoMode then return end
+    wrapper.turret.getComponent(addr).removeTrustedPlayer(player)
+end
+
 
 return wrapper

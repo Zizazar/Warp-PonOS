@@ -12,7 +12,7 @@ local internet = component.internet
 local files = {}
 print("Идет загрузка списка файлов..")
 fs.makeDirectory("/PonOS/")
-require("shell").execute("wget https://raw.githubusercontent.com/IteratorW/Warp-PonOS/dungeon_master/filelist /PonOS/filelist.txt -fq")
+require("shell").execute("wget https://raw.githubusercontent.com/Zizazar/Warp-PonOS/dungeon_master/filelist /PonOS/filelist.txt -fq")
 local file = io.open("/PonOS/filelist.txt", "r")
 files = require("serialization").unserialize(file:read("*a"))
 file:close()
@@ -32,13 +32,13 @@ local properties = {
     -- Customize localization as you want to
     localization = {
         -- Specify title of your installer
-        title = "Intestellar 2 Installer",
+        title = "PonOS Installer",
         -- Use <currentProgress>, <totalProgress> and <currentFile> text insertions to automatically display their values
         currentFile = "Downloading \"<currentFile>\"...",
         totalProgress = "Total: <totalProgress>%",
         -- Comment this lines to automatically close installer window
-        finished1 = "Interstellar2 is successfully installed!",
-        finished2 = "Please press any key to leave and open Interstellar2."
+        finished1 = "PonOS is successfully installed!",
+        finished2 = "Please press any key to leave and open PonOS."
     },
     -- Customize color scheme as you want to
     colors = {
