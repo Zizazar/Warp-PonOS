@@ -120,19 +120,20 @@ local function calculateMultiCoreDimensions(anchor)
 end
 
 local function addTrustedPlayer(addr, name)
-    if not settings.turretsTrustedPlayers[addr] then
-        settings.turretsTrustedPlayers[addr] = {}
+    if settings.turretsTrustedPlayers[addr] == nil then
+        table.insert(settings.turretsTrustedPlayers, addr, {})
     end
+    GUI.alert("Added " .. name .. " to trusted players. Address: " .. addr)
     table.insert(settings.turretsTrustedPlayers[addr], name)
 end
 local function removeTrustedPlayer(addr, ind)
-    if not settings.turretsTrustedPlayers[addr] then
-        settings.turretsTrustedPlayers[addr] = {}
+    if settings.turretsTrustedPlayers[addr] == nil then
+        table.insert(settings.turretsTrustedPlayers, addr, {})
     end
-    table.remove(settings.turretsTrustedPlayers[addr], ind)
+    return table.remove(settings.turretsTrustedPlayers[addr], ind)
 end
 local function getTrustedPlayers(addr)
-    if not settings.turretsTrustedPlayers[addr] then
+    if settings.turretsTrustedPlayers[addr] == nil then
         return {}
     end
     return settings.turretsTrustedPlayers[addr]
@@ -418,7 +419,7 @@ local function p_textBoxWithSelection(x, y, width, height)
 
     -- Custom attributes and methods
 
-    textBox.selectedIndex = nil
+    textBox.selectedItem = nil
     textBox.selectionAllowed = true
 
     local prevHandler = textBox.eventHandler
@@ -436,11 +437,11 @@ local function p_textBoxWithSelection(x, y, width, height)
     end
 
     textBox.selectItem = function(self, index)
-        if self.selectedIndex ~= nil then
-            self.lines[self.selectedIndex].color = colors.contentColor2
+        if self.selectedItem ~= nil then
+            self.lines[self.selectedItem].color = colors.contentColor2
         end
 
-        self.selectedIndex = index
+        self.selectedItem = index
         self.lines[index].color = colors.accentColor
 
         self:onItemSelected(index)
@@ -455,7 +456,7 @@ local function p_textBoxWithSelection(x, y, width, height)
     textBox.clear = function(self)
         self.lines = {}
 
-        self.selectedIndex = nil
+        self.selectedItem = nil
     end
 
     -- event
@@ -911,7 +912,7 @@ local windows = {
         end
 
         transporterButton.onTouch = function()
-            local index = resultsBox.selectedIndex
+            local index = resultsBox.selectedItem
 
             if index == nil then
                 GUI.alert("Scan entry is not selected.")
@@ -1004,7 +1005,7 @@ local windows = {
         local turretsList = layout:setPosition(1, 2, layout:addChild(p_textBoxWithSelection(1, 1, 1, 1)))
         turretsList:setAlignment(GUI.ALIGNMENT_HORIZONTAL_LEFT, GUI.ALIGNMENT_VERTICAL_CENTER)
         for i, turret in ipairs(data) do
-                turretsList:addItem(string.format("%s:[%s] owner: %s; energy: %s%%", 
+                turretsList:addItem(string.format("%s:[%s] owner: %s energy: %s%%", 
                     tostring(i),
                     string.sub(tostring(turret.addr), 1, 3),
                     turret.owner,
@@ -1031,11 +1032,14 @@ local windows = {
         addPanel:setFitting(1, 1, true, true)
         addPanel:setColumnWidth(1, GUI.SIZE_POLICY_RELATIVE, 0.55)
         addPanel:setMargin(1, 1, 1, 0)
-        local nameInput = addPanel:setPosition(1, 1, addPanel:addChild(p_input(1, 1, 1, 1, "name")))
+        local nameInput = addPanel:setPosition(1, 1, addPanel:addChild(p_input(1, 1, 1, 1, "", "player name")))
         local addButton = addPanel:setPosition(2, 1, addPanel:addChild(p_accentButton(1, 1, 3, 1, "+")))
         local addToAllButton = addPanel:setPosition(3, 1, addPanel:addChild(p_accentButton(1, 1, 5, 1, "all")))
 
-        local removeButton = buttonsPanel:setPosition(1, 2, buttonsPanel:addChild(p_accentButton(1, 1, 20, 3, "Remove")))
+        local removeButton = buttonsPanel:setPosition(1, 2, buttonsPanel:addChild(p_accentButton(1, 1, 20, 3, "remove")))
+
+        buttonsPanel:setFitting(1, 3, true, false)
+        local plAttackSwitch = buttonsPanel:setPosition(1, 3, buttonsPanel:addChild(p_switchAndLabel(1, 1, 1, "Attack players")))
 
         addButton.disabled = true
         removeButton.disabled = true
@@ -1059,31 +1063,41 @@ local windows = {
                 addToAllButton.disabled = true
                 return
             end
-            if turretsList.selectedIndex ~= nil then
+            if turretsList.selectedItem ~= nil then
                 addButton.disabled = false
             end
                 addToAllButton.disabled = false
         end
 
         turretsList.onItemSelected = function()
-            if playersList.selectedIndex ~= nil then
-                removeButton.disabled = false
-            end
             if nameInput.text ~= "" then
                 addButton.disabled = false
             end
-            updatePlayerList(data[turretsList.selectedIndex].addr)
+            local turret = data[turretsList.selectedItem]
+            updatePlayerList(turret.addr)
+            plAttackSwitch.switch:setState(turret.attacksPlayer)
+            
+            removeButton.disabled =  playersList:count() == 0 or playersList.selectedItem == nil
         end
 
         playersList.onItemSelected = function()
-            if turretsList.selectedIndex ~= nil then
+            if turretsList.selectedItem ~= nil then
                 removeButton.disabled = false
             end
         end
         -- buttons callbacks
 
+        plAttackSwitch.switch.onStateChanged = function()
+            if turretsList.selectedItem == nil then
+                GUI.alert("No turret selected")
+                plAttackSwitch.switch:setState(false)
+                return
+            end
+            wrapper.turret.setAttackPlayer(data[turretsList.selectedItem].addr, plAttackSwitch.switch.state)
+        end
+
         addButton.onTouch = function()
-            local turret = data[turretsList.selectedIndex]
+            local turret = data[turretsList.selectedItem]
             local player = nameInput.text
 
             if player == turret.owner then 
@@ -1098,12 +1112,21 @@ local windows = {
             wrapper.turret.addPlayer(turret.addr, player)
             playersList:addItem(player)
             addButton.disabled = true
+
+            if playersList.selectedItem ~= nil then
+                removeButton.disabled = false
+            end
+                
         end
 
         removeButton.onTouch = function()
-            local turret = data[turretsList.selectedIndex]
-            removeTrustedPlayer(turret.addr, playersList.selectedIndex)
-            wrapper.turret.removePlayer(turret.addr, playersList.selectedIndex)
+            local turret = data[turretsList.selectedItem]
+            if playersList.selectedItem == nil then 
+                GUI.alert("No player selected")
+                return
+            end
+            local name = removeTrustedPlayer(turret.addr, playersList.selectedItem)
+            wrapper.turret.removePlayer(turret.addr, name)
             updatePlayerList(turret.addr)
             removeButton.disabled = true
         end

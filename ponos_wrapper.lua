@@ -574,14 +574,15 @@ end
 
 wrapper.turret.getTurretsData = function () 
     if wrapper.demoMode then return {
-            { owner = "Demo", trusted = {}, energyPercent = 100, addr = "e893bf80-68ef-4fcd-bde1-0be8a184b482"},
-            { owner = "Demo", trusted = {"test", "creeper"}, energyPercent = 23, addr = "test" }
+            { owner = "Demo", trusted = {}, energyPercent = 100, attacksPlayer = true, addr = "e893bf80-68ef-4fcd-bde1-0be8a184b482"},
+            { owner = "Demo", trusted = {"test", "creeper"}, energyPercent = 23, attacksPlayer = false, addr = "test" }
     } end
     local data = {}
     for _, k in ipairs(wrapper.turret.getAllBasesAddresses()) do
         local t = wrapper.turret.getComponent(k)
         table.insert(data, {
             owner = t.getOwner(),
+            attacksPlayer = t.isAsttacksPlayer(),
             energyPercent = math.ceil(t.getCurrentEnergyStorage() / t.getMaxEnergyStorage() * 100),
             addr = k
         })
@@ -599,5 +600,9 @@ wrapper.turret.removePlayer = function (addr, player)
     wrapper.turret.getComponent(addr).removeTrustedPlayer(player)
 end
 
+wrapper.turret.setAttackPlayer = function (addr, bool)
+    if wrapper.demoMode then return end
+    wrapper.turret.getComponent(addr).setAttacksPlayers(bool)
+end
 
 return wrapper
